@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+    <meta charset="utf-8">
+<head>
+    <script>
+        function fetchDawg(name) {
+            return new Promise((resolve, reject) => {
+                var req = new XMLHttpRequest(), fileSize;
+                req.onreadystatechange = function () {
+                    if (4 === req.readyState && 200 === req.status) {
+                        fileSize = req.getResponseHeader('Content-Length');
+                        const header=new Uint32Array(req.response, 0, 16);
+                        const firstNode=header[2]>>2;
+                        const dawg=new Uint32Array(req.response, 16);
+
+                        resolve({dawg, firstNode, fileSize});
+                    }
+                }
+                req.open('GET', name, true);
+                req.responseType = "arraybuffer";
+                req.send();
+            });
+        }
+
+        function list(dawg, firstNode, onWord) {
+            var sb = [];
+            traverse(firstNode);
+
+            function traverse(idx) {
+                let w;
+                do {
+                    w = dawg[idx];
+                    sb.push(String.fromCharCode(w >>> 24));
+                    if (w & 2) {
+                        onWord(sb.join(''));
+                    }
+                    if (w & 0xfffffc) {
+                        traverse((w & 0xfffffc) >> 2);
+                    }
+                    sb.pop();
+                    ++idx;
+                } while (0 === (w & 1));
+            }
+        }
+
+        function listDawg() {
+            var host = document.querySelector('#words'), head = document.querySelector('#head');
+            fetchDawg('zahlen3180.dwg').then(({dawg, firstNode, fileSize}) => {
+                var wordCount = 0;
+                list(dawg, firstNode, w => {
+                    if(wordCount<100) {
+                        var line = document.createElement('div');
+                        line.innerText = w;
+                        host.appendChild(line);
+                        host.appendChild(document.createTextNode(' '));
+                    }
+                    ++wordCount;
+                });
+                head.innerText = wordCount + ' words in ' + fileSize + ' bytes (' + (fileSize * 8 / wordCount).toFixed(5) + ' bits per word)';
+            });
+        }
+    </script>
+    <style>
+        #words {
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        #words>div {
+            display: inline-block;
+        }
+    </style>
+</head>
+
+<body onload="listDawg()">
+    <!--
+        zahlen3180.dwg represents a word list of german numerals.
+        They are so regular, they compress really well in dawg, 5520715 words in 3180 bytes (including 16 header bytes).
+        No further compression is necessary to get them below 64 KB.
+
+        Construction:
+        * letters are encoded in the arcs as iso-latin-1 bytes (iso-8859-1).
+        * TODO: remove 16 header bytes by moving the first node to the beginning of the file.
+
+        It is an example that words/byte is not always a good measure:
+        One one hand we encode a numeral in less than 5 millibits, on the other hand this word list is completely useless for Scrabble(R)-type games.
+    -->
+    <h3 id="head"></h3>
+    <div id="words"></div>
+</body>
+
+</html>
