@@ -4,7 +4,7 @@ There've been programs on 8-bit computers that played word games such as Scrabbl
 
 Today some of the problems have gone, today word game programs cannot play at full strength due to copyright issues on the official word lists. I am not advocating for or against here, official word lists have to be published and professionally cared for, those people should be recompensated in a sensible manner.
 
-Restricted word lists today are merely just fun. But the proposed size should be so small that word selection (that what a copyright is on – you surely cannot copyright words, can you?) is so completely different than that of the copyrighted lists, that the restricted word lists are just different. Or does the copyright on an official word list cover all smaller sublists, esp. *much* smaller ones?
+Restricted word lists today are merely just fun. But the proposed size should be so small that word selection (that's what a copyright is on – you surely cannot copyright words, can you?) is so completely different than that of the copyrighted lists, that the restricted word lists are just different. Or does the copyright on an official word list cover all smaller sublists, esp. *much* smaller ones?
 
 I think, we are in the fun domain here. And – if the words are selected appropriately – the word lists here can be used by aspiring authors of word game programs as training sets and/or word lists that the programs can be published with, without touching copyright/patent issues.
 
