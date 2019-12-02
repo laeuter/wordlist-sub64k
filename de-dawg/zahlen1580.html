@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
-    <meta charset="utf-8">
+<meta charset="utf-8">
+
 <head>
     <script>
         function fetchDawg(name) {
@@ -9,11 +10,9 @@
                 req.onreadystatechange = function () {
                     if (4 === req.readyState && 200 === req.status) {
                         fileSize = req.getResponseHeader('Content-Length');
-                        const header=new Uint32Array(req.response, 0, 16);
-                        const firstNode=header[2]>>2;
-                        const dawg=new Uint32Array(req.response, 16);
+                        const dawg = new Uint16Array(req.response);
 
-                        resolve({dawg, firstNode, fileSize});
+                        resolve({ dawg, fileSize });
                     }
                 }
                 req.open('GET', name, true);
@@ -22,33 +21,34 @@
             });
         }
 
-        function list(dawg, firstNode, onWord) {
+        const lets = '\u0000abcdefghijklmnopqrstuvwxyzäöüß';
+        function list(dawg, onWord) {
             var sb = [];
-            traverse(firstNode);
+            traverse(0);
 
             function traverse(idx) {
                 let w;
                 do {
                     w = dawg[idx];
-                    sb.push(String.fromCharCode(w >>> 24));
-                    if (w & 2) {
+                    sb.push(lets[w >>> 11]);
+                    if (w & 1) {
                         onWord(sb.join(''));
                     }
-                    if (w & 0xfffffc) {
-                        traverse((w & 0xfffffc) >> 2);
+                    if (w & 0x7fe) {
+                        traverse((w & 0x7fe) >> 1);
                     }
                     sb.pop();
                     ++idx;
-                } while (0 === (w & 1));
+                } while (idx<dawg.length && (w&0xf800)<(dawg[idx]&0xf800));
             }
         }
 
         function listDawg() {
             var host = document.querySelector('#words'), head = document.querySelector('#head');
-            fetchDawg('zahlen3180.dwg').then(({dawg, firstNode, fileSize}) => {
+            fetchDawg('zahlen1580.dwg').then(({ dawg, fileSize }) => {
                 var wordCount = 0;
-                list(dawg, firstNode, w => {
-                    if(wordCount<100) {
+                list(dawg, w => {
+                    if (wordCount < 100) {
                         var line = document.createElement('div');
                         line.innerText = w;
                         host.appendChild(line);
@@ -73,16 +73,25 @@
 
 <body onload="listDawg()">
     <!--
-        zahlen3180.dwg represents a word list of german numerals.
-        They are so regular, they compress really well in dawg, 5520715 words in 3180 bytes (including 16 header bytes).
+        zahlen1580.dwg represents a word list of German numerals.
+        They are so regular, they compress really well in dawg, 5520715 words in 1580 bytes.
         No further compression is necessary to get them below 64 KB.
 
         Construction:
-        * letters are encoded in the arcs as iso-latin-1 bytes (iso-8859-1).
-        * TODO: remove 16 header bytes by moving the first node to the beginning of the file.
+        * These are not *all* German numerals. We have not included:
+            * million, milliarde, billion etc.,
+            * anderthalb, drittehalb, viertehalb etc.,
+            * erste, zweite etc.,
+            * einerlei, zweierlei, dreierlei etc.
+            * etc.
+            It's hard to tell where to end, and they are quite easily generatable from the current dawg.
+        * The 16 Bits of an arc have the following layout: LLLLL PPPPPPPPP W (L=letter, P=pointer=arc number, W=end-of-word bit).
+        * There is no bit for the end of an arc. An arc ends when
+            a) we have reached the end of the dawg or
+            b) the letter bits don't grow from the current arc to the next.
 
         It is an example that words/byte is not always a good measure:
-        One one hand we encode a numeral in less than 5 millibits, on the other hand this word list is completely useless for Scrabble(R)-type games.
+        On one hand we encode a numeral in less than 2.3 millibits, on the other hand this word list is completely useless for Scrabble(R)-type games.
     -->
     <h3 id="head"></h3>
     <div id="words"></div>
