@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+    <meta charset="utf-8">
+<head>
+    <script>
+        function fetchDawg(name) {
+            return new Promise((resolve, reject) => {
+                var req = new XMLHttpRequest(), fileSize;
+                req.onreadystatechange = function () {
+                    if (4 === req.readyState && 200 === req.status) {
+                        fileSize = req.getResponseHeader('Content-Length');
+                        const dawg = new Uint8Array(req.response);
+
+                        resolve({ dawg, fileSize });
+                    }
+                }
+                req.open('GET', name, true);
+                req.responseType = "arraybuffer";
+                req.send();
+            });
+        }
+
+        var lets = '\u0000ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜ';
+        function list(dawg, onWord) {
+            const sb = [];
+            traverse(0);
+
+            function traverse(idx) {
+                let lastLet=0;
+                do {
+                    const head = dawg[idx]||0, ltr=head >>> 3; let ptr;
+                    if(lastLet>=ltr) {
+                        break;
+                    }
+                    if(head&4) {
+                        ptr=((head&1)<<16)|(dawg[++idx]<<8)|dawg[++idx];
+                    } else {
+                        ptr=((head&1)<<8)|dawg[++idx];
+                    }
+                    sb.push(lets[ltr]);
+                    if (head & 2) {
+                        onWord(sb.join(''));
+                    }
+                    if (ptr) {
+                        traverse(idx+ptr);
+                    }
+                    sb.pop();
+                    lastLet=ltr;
+                    ++idx;
+                } while (true);
+            }
+        }
+
+        function listDawg() {
+            var host = document.querySelector('#words'), head = document.querySelector('#head');
+            fetchDawg('92223.dwg16').then(info => {
+                var wordCount = 0;
+                list(info.dawg, w => {
+                    var line = document.createElement('div');
+                    line.innerText = w;
+                    host.appendChild(line);
+                    host.appendChild(document.createTextNode(' '));
+                    ++wordCount;
+                });
+                head.innerText = wordCount + ' words in ' + info.fileSize + ' bytes (' + (info.fileSize * 8 / wordCount).toFixed(5) + ' bits per word)';
+            });
+        }
+    </script>
+    <style>
+        #words {
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        #words>div {
+            display: inline-block;
+        }
+    </style>
+</head>
+
+<body onload="listDawg()">
+    <!--
+        92223.dwg16 represents a word list suitable for playing German Scrabble(R)-like games.
+        Word forms are accepted, proper names are disallowed.
+        Word selection was directed by usage count in Scrabble (R) games.
+
+        Construction:
+        * starting with an ordinary 4-byte-per-arc DAWG with the selected words
+        * reordered nodes so that
+          * all arcs jump forward
+          * jumps are either long or short (more or less than 511 bytes)
+          * maximizing the short jumps
+          * the first letter of the next node is not greater than the last letter of the current node (eliminating the end-of-node bit)
+        * arcs with short jumps are encoded as LLLLL 0 W J | JJJJJJJJ (L=letter, W=end of word, J=jump distance)
+        * arcs with long jumps are encoded as LLLLL 1 W J | JJJJJJJJ | JJJJJJJJ
+        * jump distance counts from last arc byte, so that 0 can carry the meaning of "Do not jump!".
+    -->
+    <h3 id="head"></h3>
+    <div id="words"></div>
+</body>
+
+</html>
