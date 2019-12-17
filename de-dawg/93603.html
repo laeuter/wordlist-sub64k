@@ -53,7 +53,7 @@
 
         function listDawg() {
             var host = document.querySelector('#words'), head = document.querySelector('#head');
-            fetchDawg('92223.dwg16').then(info => {
+            fetchDawg('93603.dwg16').then(info => {
                 var wordCount = 0;
                 list(info.dawg, w => {
                     var line = document.createElement('div');
@@ -79,7 +79,7 @@
 
 <body onload="listDawg()">
     <!--
-        92223.dwg16 represents a word list suitable for playing German Scrabble(R)-like games.
+        93603.dwg16 represents a word list suitable for playing German Scrabble(R)-like games.
         Word forms are accepted, proper names are disallowed.
         Word selection was directed by usage count in Scrabble (R) games.
 
