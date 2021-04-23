@@ -55,13 +55,15 @@
             var host = document.querySelector('#words'), head = document.querySelector('#head');
             fetchDawg('102169.dwg16').then(info => {
                 var wordCount = 0;
+                var frag = document.createDocumentFragment();
                 list(info.dawg, w => {
                     var line = document.createElement('div');
                     line.innerText = w;
-                    host.appendChild(line);
-                    host.appendChild(document.createTextNode(' '));
+                    frag.appendChild(line);
+                    frag.appendChild(document.createTextNode(' '));
                     ++wordCount;
                 });
+                host.appendChild(frag);
                 head.innerText = wordCount + ' words in ' + info.fileSize + ' bytes (' + (info.fileSize * 8 / wordCount).toFixed(5) + ' bits per word)';
             });
         }

@@ -64,14 +64,17 @@
             var host = document.querySelector('#words'), head = document.querySelector('#head');
             fetchDawg('136321.png').then(dawg => {
                 var wordCount = 0;
+                var frag = document.createDocumentFragment();
                 list(dawg, w => {
                     var line = document.createElement('div');
                     line.innerText = w;
-                    host.appendChild(line);
-                    host.appendChild(document.createTextNode(' '));
+                    frag.appendChild(line);
+                    frag.appendChild(document.createTextNode(' '));
                     ++wordCount;
                 });
+                host.appendChild(frag);
                 // listing is done.
+                
                 // just for fun: show the file size, too
                 var req = new XMLHttpRequest(), fileSize;
                 req.onreadystatechange = function () {

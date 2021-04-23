@@ -47,15 +47,17 @@
             var host = document.querySelector('#words'), head = document.querySelector('#head');
             fetchDawg('zahlen1580.dwg').then(({ dawg, fileSize }) => {
                 var wordCount = 0;
+                var frag = document.createDocumentFragment();
                 list(dawg, w => {
                     if (wordCount < 100) {
                         var line = document.createElement('div');
                         line.innerText = w;
-                        host.appendChild(line);
-                        host.appendChild(document.createTextNode(' '));
+                        frag.appendChild(line);
+                        frag.appendChild(document.createTextNode(' '));
                     }
                     ++wordCount;
                 });
+                host.appendChild(frag);
                 head.innerText = wordCount + ' words in ' + fileSize + ' bytes (' + (fileSize * 8 / wordCount).toFixed(5) + ' bits per word)';
             });
         }
