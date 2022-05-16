@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<meta charset="utf-8">
+
+<head>
+    <script>
+        function fetchDawg(name) {
+            return new Promise((resolve, reject) => {
+                var req = new XMLHttpRequest(), fileSize;
+                req.onreadystatechange = function () {
+                    if (4 === req.readyState && 200 === req.status) {
+                        const data = new Uint8Array(req.response);
+
+                        resolve({ data, fileSize: data.length });
+                    }
+                }
+                req.open('GET', name, true);
+                req.responseType = "arraybuffer";
+                req.send();
+            });
+        }
+
+        function list(wordlist, onWord) {
+            const sb = [];
+            const p1 = wordlist.lastIndexOf(0), p0 = wordlist.lastIndexOf(0, p1 - 1);
+            wordlist = [...wordlist];
+            // decode endings
+            const endings = [''];
+            for (let i = p0 + 1; i < p1; i += wordlist[i] + 1) {
+                const e = wordlist.slice(i + 1, i + 1 + wordlist[i]).map(lat => String.fromCharCode(lat)).join('');
+                endings.push(e);
+            }
+            // decode endings sets
+            const endingSets = [['']];
+            for (let i = p1 + 1; i < wordlist.length; i += wordlist[i] + 1) {
+                const eset = wordlist.slice(i + 1, i + 1 + wordlist[i]).map(idx => endings[idx]);
+                endingSets.push(eset);
+            }
+            // walk words
+            let p = 0, last = '@', isAddedVocabulary = false;
+            do {
+                const op = wordlist[p++];
+                if (0 === op) {
+                    isAddedVocabulary = true;
+                } else {
+                    const keep = (op >> 4) & 7;
+                    const isWord = ~op & 0x80;
+                    const esetIdx = op & 1 ? wordlist[p++] : 0;
+                    const newLetterCount = (op >> 1) & 7;
+                    if (0 === keep && last.charCodeAt(0) !== wordlist[p]) {
+                        isAddedVocabulary = false;
+                    }
+                    const root = last.substring(0, keep) + wordlist.slice(p, p + newLetterCount).map(lat => String.fromCharCode(lat)).join('');
+                    if (isWord) {
+                        onWord(root, isAddedVocabulary);
+                    }
+                    endingSets[esetIdx].forEach(end => onWord(root + end, isAddedVocabulary));
+                    last = root;
+                    p += newLetterCount;
+                }
+            } while (wordlist[p] || wordlist[p + 1]);
+        }
+
+        function showList() {
+            var host = document.querySelector('#words'), head = document.querySelector('#head');
+            fetchDawg('csdeluxe.bin').then(info => {
+                var sb = [], presentChecker = {};
+                list(info.data, (w, isAddedVocabulary) => {
+                    let list = presentChecker[w[0]];
+                    if (list == null) {
+                        presentChecker[w[0]] = [w];
+                        sb.push(isAddedVocabulary ? '+' + w : w);
+                    } else if (!list.includes(w)) {
+                        list.push(w);
+                        sb.push(isAddedVocabulary ? '+' + w : w);
+                    }
+                });
+                host.innerText = sb.join(' ');
+                head.innerText = sb.length + ' words in ' + info.fileSize + ' bytes (' + (info.fileSize * 8 / sb.length).toFixed(5) + ' bits per word)';
+            });
+        }
+    </script>
+    <style>
+        #words {
+            font-family: 'Courier New', Courier, monospace;
+        }
+    </style>
+</head>
+
+<body onload="showList()">
+    <!--
+        rawwl.bin represents a word list suitable for playing English Scrabble(R)-like games.
+        Word forms are accepted, proper names are disallowed.
+        Word selection was directed by usage count in Scrabble (R) games.
+        Construction:
+        * The bytes have been stolen from the 1987 Sinclair Spectrum 128 program 'Computer Scrabble De Luxe' by Leisure Genius (https://worldofspectrum.org/archive/software/games/scrabble-deluxe-leisure-genius) who packed a 20521-word wordlist in 27498 bytes.
+        * an entry is encoded like this:
+          1 byte op: bits I KKK NNN E
+            - KKK = number of letters to keep from the previous entry
+            - NNN = number of literal letters following
+            - I = the kept letters + literal letters form an incomplete word
+            - E = a byte with the index of the index set follows. Otherwise no endings apply.
+          1 byte ending set index, if E was set
+          NNN bytes literal letters
+          => This entry encodes a root of KKK + NNN letters. This is a word if I = 0. Each ending of the ending set is appended to the root, and each string provides a word.
+        * op = 0 at the end of each starting letter starts the appendix to this letter with uncommon (but valid) words.
+        * bytes 0, 0 end the words
+        * The distinct strings of the ending sets follow: length byte and literal letters, length = 0 marks the end
+        * The ending sets are also encoded as length byte and literal ending string indexes, until file ends
+        * Words encoded by different entries may overlap.
+        * This scheme, invented by Irwan Owen & John Mullins, compresses significantly better than any DAWG compression, they are heros! DAWGs are still faster to walk and have no duplicates.
+    -->
+    <h3 id="head"></h3>
+    <div id="words"></div>
+</body>
+
+</html>

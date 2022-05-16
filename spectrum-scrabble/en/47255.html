@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<meta charset="utf-8">
+
+<head>
+    <script>
+        const LETTERS = " ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+        function fetchDawg(name) {
+            return new Promise((resolve, reject) => {
+                var req = new XMLHttpRequest(), fileSize;
+                req.onreadystatechange = function () {
+                    if (4 === req.readyState && 200 === req.status) {
+                        const data = new Uint8Array(req.response);
+
+                        resolve({ data, fileSize: data.length });
+                    }
+                }
+                req.open('GET', name, true);
+                req.responseType = "arraybuffer";
+                req.send();
+            });
+        }
+
+        function list(wordlist, onWord) {
+            const sb = [];
+            const p0 = wordlist.indexOf(0), rawEsIdx = wordlist[wordlist.length - 1];
+            wordlist = [...wordlist];
+            wordlist[wordlist.length - 1] = 0;
+            // decode endings sets
+            const endingSets = [];
+            for (let i = p0 + 1; i < wordlist.length - 1; ++i) {
+                const eset = [];
+                let last = '@';
+                while (wordlist[i]) {
+                    const op = wordlist[i++];
+                    const keep = (op >> 2) & 0x1f;
+                    const restbuf = [];
+                    if (op & 2) {
+                        do { restbuf.push(LETTERS[wordlist[i] & 0x7f]); } while (0 === (wordlist[i++] & 0x80));
+                    }
+                    eset.push(last = last.substring(0, keep) + restbuf.join(''));
+                }
+                endingSets.push(eset);
+            }
+            endingSets.splice(rawEsIdx, 0, ['']);
+            // walk words
+            let p = 0, last = '@';
+            do {
+                const op = wordlist[p++];
+                let keep = (op >> 2) & 0x1f;
+                const isWord = op & 0x80;
+                const esetIdx = op & 1 ? wordlist[p++] : 0;
+                const restbuf = [];
+                if (op & 2) {
+                    do { restbuf.push(LETTERS[wordlist[p] & 0x7f]); } while (0 === (wordlist[p++] & 0x80));
+                }
+                const root = last.substring(0, keep) + restbuf.join('');
+                if (isWord) {
+                    onWord(root);
+                }
+                endingSets[esetIdx].forEach(end => onWord(root + end));
+                last = root;
+            } while (wordlist[p]);
+        }
+
+        function showList() {
+            var host = document.querySelector('#words'), head = document.querySelector('#head');
+            fetchDawg('english47255.lgwl2').then(info => {
+                var sb = [], presentChecker = {};
+                list(info.data, w => {
+                    let list = presentChecker[w[0]];
+                    if (list == null) {
+                        presentChecker[w[0]] = [w];
+                        sb.push(w);
+                    } else if (!list.includes(w)) {
+                        list.push(w);
+                        sb.push(w);
+                    }
+                });
+                host.innerText = sb.join(' ');
+                head.innerText = sb.length + ' words in ' + info.fileSize + ' bytes (' + (info.fileSize * 8 / sb.length).toFixed(5) + ' bits per word)';
+            });
+        }
+    </script>
+    <style>
+        #words {
+            font-family: 'Courier New', Courier, monospace;
+        }
+    </style>
+</head>
+
+<body onload="showList()">
+    <!--
+        english.specwl2 represents a word list suitable for playing German Scrabble(R)-like games.
+        Word forms are accepted, proper names are disallowed.
+        Word selection was directed by usage count in Scrabble (R) games.
+        Construction:
+        * determine the most useful ending sets for the wordlist, especially for words up to 5 letters
+        * as long as the compressed wordlist satisfies the size constraint, add words, from most frequently played to least frequently played; use the best of the available ending sets
+        * an entry is encoded like this:
+          1 byte op: bits W KKKKK N E
+            - KKKKK = number of letters to keep from the previous entry
+            - N = flag, if literal letters follow
+            - W = the kept letters + literal letters form a valid word
+            - E = a byte with the index of the index set follows. Otherwise no endings apply.
+          1 byte ending set index, if E was set
+          if N ist set, some bytes literal letters, last byte has bit 7 set
+          => This entry encodes a root of KKKKK + some letters. This is a word if W = 1. Each ending of the ending set is appended to the root, and each string provides a word.
+        * In order to make this compress well, entries are sorted alphabetically before being encoded
+        * op = 0 ends the entries
+        * The ending sets follow: each ending set is encoded the same way as above, until 0-byte (or 1 if it is the last byte of the file)
+        * The last byte of the file is the index of the ending set only consisting of the empty string.
+        * Words encoded by different entries may overlap (they are not in alphabetical order, either), but hey, creating additional restricted ending sets takes space
+        * Compression is heavily inspired by the 1987 Sinclair Spectrum 128 program 'Computer Scrabble De Luxe' by Leisure Genius (https://worldofspectrum.org/archive/software/games/scrabble-deluxe-leisure-genius) who packed a 20521-word wordlist in 25956 bytes. They even represented a reduced wordlist by using op=0 to end the reduced portion of a starting letter, continuing by the extended portion until the first letter changed. The wordlist ended by two 0 bytes. This scheme invented by Irwan Owen & John Mullins compresses significantly better than any DAWG compression, at least for German Scrabble wordlists, they are heros! DAWG is still faster to walk and has no duplicates.
+    -->
+    <h3 id="head"></h3>
+    <div id="words"></div>
+</body>
+
+</html>

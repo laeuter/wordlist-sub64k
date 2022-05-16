@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<meta charset="utf-8">
+
+<head>
+    <script>
+        function fetchDawg(name) {
+            return new Promise((resolve, reject) => {
+                var req = new XMLHttpRequest(), fileSize;
+                req.onreadystatechange = function () {
+                    if (4 === req.readyState && 200 === req.status) {
+                        const data = new Uint8Array(req.response);
+
+                        resolve({ data, fileSize: data.length });
+                    }
+                }
+                req.open('GET', name, true);
+                req.responseType = "arraybuffer";
+                req.send();
+            });
+        }
+
+        function list(wordlist, onWord) {
+            const sb = [];
+            const p0 = wordlist.indexOf(0), p1 = wordlist.indexOf(0, p0 + 1);
+            wordlist = [...wordlist];
+            // decode endings
+            const endings = [];
+            for (let i = p0 + 1; i < p1; i += wordlist[i] + 1) {
+                const e = wordlist.slice(i + 1, i + 1 + wordlist[i]).map(lat => String.fromCharCode(lat)).join('');
+                endings.push(e);
+            }
+            // decode endings sets
+            const endingSets = [['']];
+            for (let i = p1 + 1; i < wordlist.length; i += wordlist[i] + 1) {
+                const eset = wordlist.slice(i + 1, i + 1 + wordlist[i]).map(idx => endings[idx]);
+                endingSets.push(eset);
+            }
+            // walk words
+            let p = 0, last = '@';
+            do {
+                const op = wordlist[p++];
+                let keep = (op >> 4) & 7;
+                const isWord = op & 0x80;
+                const esetIdx = op & 1 ? wordlist[p++] : 0;
+                let newLetterCount = (op >> 1) & 7;
+                if (0 == keep + newLetterCount) { // was not present in original program
+                    var twoNibbles = wordlist[p++] - 1;
+                    keep = twoNibbles >> 4;
+                    newLetterCount = twoNibbles & 0xf;
+                }
+                const root = last.substring(0, keep) + wordlist.slice(p, p + newLetterCount).map(lat => String.fromCharCode(lat)).join('');
+                if (isWord) {
+                    onWord(root);
+                }
+                endingSets[esetIdx].forEach(end => onWord(root + end));
+                last = root;
+                p += newLetterCount;
+            } while (wordlist[p]);
+        }
+
+        function showList() {
+            var host = document.querySelector('#words'), head = document.querySelector('#head');
+            fetchDawg('english26329.lgwl').then(info => {
+                var sb = [], presentChecker = {};
+                list(info.data, w => {
+                    let list = presentChecker[w[0]];
+                    if (list == null) {
+                        presentChecker[w[0]] = [w];
+                        sb.push(w);
+                    } else if (!list.includes(w)) {
+                        list.push(w);
+                        sb.push(w);
+                    }
+                });
+                host.innerText = sb.join(' ');
+                head.innerText = sb.length + ' words in ' + info.fileSize + ' bytes (' + (info.fileSize * 8 / sb.length).toFixed(5) + ' bits per word)';
+            });
+        }
+    </script>
+    <style>
+        #words {
+            font-family: 'Courier New', Courier, monospace;
+        }
+    </style>
+</head>
+
+<body onload="showList()">
+    <!--
+        german.specwl represents a word list suitable for playing German Scrabble(R)-like games.
+        Word forms are accepted, proper names are disallowed.
+        Word selection was directed by usage count in Scrabble (R) games.
+        Construction:
+        * determine the most useful ending sets for the wordlist, especially for words up to 5 letters
+        * as long as the compressed wordlist satisfies the size constraint, add words, from most frequently played to least frequently played; use the best of the available ending sets
+        * an entry is encoded like this:
+          1 byte op: bits W KKK NNN E
+            - KKK = number of letters to keep from the previous entry
+            - NNN = number of literal letters following
+            - W = the kept letters + literal letters form a valid word
+            - E = a byte with the index of the index set follows. Otherwise no endings apply.
+          1 byte ending set index, if E was set
+          NNN bytes literal letters
+          => This entry encodes a root of KKK + NNN letters. This is a word if W = 1. Each ending of the ending set is appended to the root, and each string provides a word.
+        * In order to make this compress well, entries are sorted alphabetically before being encoded
+        * op = 0 ends the entries
+        * The distinct strings of the ending sets follow: length byte and literal letters, length = 0 marks the end
+        * The ending sets are also encoded as length byte and literal ending string indexes, until file ends
+        * Words encoded by different entries may overlap (we have 131K for 114K distinct words, and they are not in alphabetical order, either), but hey, ending sets are limited (in this case by 256 distinct ending strings indexable by one byte)
+        * Compression (esp. of ending strings and ending sets) can be significantly improved, but I wanted to keep the compression of the 1987 Sinclair Spectrum 128 program 'Computer Scrabble De Luxe' by Leisure Genius (https://worldofspectrum.org/archive/software/games/scrabble-deluxe-leisure-genius) who packed a 20521-word wordlist in 25956 bytes. They even represented a reduced wordlist by using op=0 to end the reduced portion of a starting letter, continuing by the extended portion until the first letter changed. The wordlist ended by two 0 bytes.
+        * I had to change the W flag to prevent 0-bytes: The original scheme used this bit for *incomplete* words. 
+        * This scheme invented by Irwan Owen & John Mullins compresses significantly better than any DAWG compression, at least for German Scrabble wordlists, they are heros! DAWG is still faster to walk and has no duplicates.
+    -->
+    <h3 id="head"></h3>
+    <div id="words"></div>
+</body>
+
+</html>
